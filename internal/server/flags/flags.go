@@ -14,15 +14,34 @@ type Config struct {
 	StoreInterval   int
 	FileStoragePath string
 	Restore         bool
+	ServerLogFile   string
+	DBDSN		   string
 }
 
 // GetFlags устанавливает и получает флаги
 func GetFlags() {
+	// Set the environment variable names
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	bindEnvToViper("DatabaseDSN", "DATABASE_DSN")
+	bindEnvToViper("ServerAddress", "ADDRESS")
+	bindEnvToViper("StoreInterval", "STORE_INTERVAL")
+	bindEnvToViper("FileStoragePath", "FILE_STORAGE_PATH")
+	bindEnvToViper("Restore", "RESTORE")
+	bindEnvToViper("ServerLoggerFile", "SERVER_LOGGER_FILE")
+
+	// Read the environment variables
+	viper.AutomaticEnv()
+
+	// postgres://postgres:mypassword@localhost:5432/metrix?sslmode=disable
+	// metrics-db.json
+
 	// Define the flags and bind them to viper
+    pflag.StringP("DatabaseDSN", "d", "", "Database DSN")
 	pflag.StringP("ServerAddress", "a", "localhost:8080", "HTTP server network address")
 	pflag.IntP("StoreInterval", "i", 300, "Interval in seconds to store the current server readings to disk")
-	pflag.StringP("FileStoragePath", "f", "/tmp/metrics-db.json", "Full filename where current values are saved")
+	pflag.StringP("FileStoragePath", "f", "", "Full filename where current values are saved")
 	pflag.BoolP("Restore", "r", true, "Whether to load previously saved values from the specified file at server startup")
+	pflag.StringP("ServerLoggerFile", "l", "serverlog.log", "Full filename where server logs are saved")
 
 	// Parse the command-line flags
 	pflag.Parse()
@@ -35,20 +54,12 @@ func GetFlags() {
 	}
 
 	// Bind the flags to viper
+	bindFlagToViper("DatabaseDSN")
 	bindFlagToViper("ServerAddress")
 	bindFlagToViper("StoreInterval")
 	bindFlagToViper("FileStoragePath")
 	bindFlagToViper("Restore")
-
-	// Set the environment variable names
-	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	bindEnvToViper("ServerAddress", "ADDRESS")
-	bindEnvToViper("StoreInterval", "STORE_INTERVAL")
-	bindEnvToViper("FileStoragePath", "FILE_STORAGE_PATH")
-	bindEnvToViper("Restore", "RESTORE")
-
-	// Read the environment variables
-	viper.AutomaticEnv()
+	bindFlagToViper("ServerLoggerFile")
 }
 
 func bindFlagToViper(flagName string) {
@@ -71,7 +82,19 @@ func NewConfig() *Config {
 		StoreInterval:   Interval(),
 		FileStoragePath: FileStoragePath(),
 		Restore:         Restore(),
+		ServerLogFile:   ServerLogFile(),
+		DBDSN:		     DBDSN(),
 	}
+}
+
+// DBDSN возвращает строку подключения к базе данных
+func DBDSN() string {
+	return viper.GetString("DatabaseDSN")
+}
+
+// ServerLogFile возвращает путь к файлу логирования сервера
+func ServerLogFile() string {
+	return viper.GetString("ServerLoggerFile")
 }
 
 // Address возвращает адрес сервера

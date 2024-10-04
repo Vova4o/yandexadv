@@ -9,17 +9,27 @@ import (
 	"github.com/vova4o/yandexadv/internal/agent/flags"
 	"github.com/vova4o/yandexadv/internal/agent/metrics"
 	"github.com/vova4o/yandexadv/internal/agent/sender"
+	"github.com/vova4o/yandexadv/package/logger"
 )
 
 // change this later to a config stuct
 var (
 	pollCount    int64
-	metricsData  []metrics.Metric
+	metricsData  []metrics.Metrics
 	metricsMutex sync.Mutex
 )
 
 func main() {
 	config := flags.NewConfig()
+
+	logger, err := logger.NewLogger("info", config.AgenLogFileName)
+	if err != nil {
+		fmt.Println("Error creating logger")
+		return
+	}
+
+	logger.Info("Starting agent")
+	logger.Info("Server address: " + config.ServerAddress)
 
 	tickerPoll := time.NewTicker(config.PollInterval)
 	tickerReport := time.NewTicker(config.ReportInterval)
@@ -34,9 +44,10 @@ func main() {
 
 		case <-tickerReport.C:
 			metricsMutex.Lock()
-			sender.SendMetrics(config.ServerAddress, metricsData)
+			// sender.SendMetrics(config.ServerAddress, metricsData)
+			// sender.SendMetricsJSON(config.ServerAddress, metricsData)
+			sender.SendMetricsBatch(config.ServerAddress, metricsData)
 			metricsMutex.Unlock()
-			fmt.Println("Sent metrics")
 		}
 	}
 }

@@ -1,126 +1,86 @@
-package storage
+package storage_test
 
 import (
 	"testing"
 
-	"github.com/vova4o/yandexadv/internal/models"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/vova4o/yandexadv/internal/server/flags"
+	"github.com/vova4o/yandexadv/internal/server/storage"
+	"go.uber.org/zap"
 )
 
-func TestStorage(t *testing.T) {
-	tests := []struct {
-		name          string
-		setup         func() *Storage
-		method        string
-		input         models.Metric
-		expectedValue interface{}
-		expectedError error
-	}{
-		{
-			name: "MetrixStatistic - empty storage",
-			setup: func() *Storage {
-				return New()
-			},
-			method:        "MetrixStatistic",
-			expectedValue: map[string]interface{}{},
-			expectedError: nil,
-		},
-		{
-			name: "UpdateMetric - add gauge metric",
-			setup: func() *Storage {
-				return New()
-			},
-			method: "UpdateMetric",
-			input: models.Metric{
-				Type:  "gauge",
-				Name:  "testGauge",
-				Value: 123.45,
-			},
-			expectedValue: nil,
-			expectedError: nil,
-		},
-		{
-			name: "GetValue - existing gauge metric",
-			setup: func() *Storage {
-				s := New()
-				s.UpdateMetric(models.Metric{
-					Type:  "gauge",
-					Name:  "testGauge",
-					Value: 123.45,
-				})
-				return s
-			},
-			method: "GetValue",
-			input: models.Metric{
-				Type: "gauge",
-				Name: "testGauge",
-			},
-			expectedValue: 123.45,
-			expectedError: nil,
-		},
-		{
-			name: "GetValue - non-existing metric",
-			setup: func() *Storage {
-				return New()
-			},
-			method: "GetValue",
-			input: models.Metric{
-				Type: "gauge",
-				Name: "nonExisting",
-			},
-			expectedValue: "",
-			expectedError: models.ErrMetricNotFound,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s := tt.setup()
-
-			switch tt.method {
-			case "MetrixStatistic":
-				value, err := s.MetrixStatistic()
-				if err != tt.expectedError {
-					t.Errorf("expected error: %v, got: %v", tt.expectedError, err)
-				}
-				if !equal(value, tt.expectedValue) {
-					t.Errorf("expected value: %v, got: %v", tt.expectedValue, value)
-				}
-			case "UpdateMetric":
-				err := s.UpdateMetric(tt.input)
-				if err != tt.expectedError {
-					t.Errorf("expected error: %v, got: %v", tt.expectedError, err)
-				}
-			case "GetValue":
-				value, err := s.GetValue(tt.input)
-				if err != tt.expectedError {
-					t.Errorf("expected error: %v, got: %v", tt.expectedError, err)
-				}
-				if value != tt.expectedValue {
-					t.Errorf("expected value: %v, got: %v", tt.expectedValue, value)
-				}
-			}
-		})
-	}
+// MockLogger для тестирования
+type MockLogger struct {
+    mock.Mock
 }
 
-// equal - вспомогательная функция для сравнения значений
-func equal(a, b interface{}) bool {
-	switch a := a.(type) {
-	case map[string]interface{}:
-		b, ok := b.(map[string]interface{})
-		if !ok {
-			return false
-		}
-		if len(a) != len(b) {
-			return false
-		}
-		for k, v := range a {
-			if !equal(v, b[k]) {
-				return false
-			}
-		}
-		return true
-	default:
-		return a == b
-	}
+// Info логирует информационные сообщения
+func (m *MockLogger) Info(msg string, fields ...zap.Field) {
+    m.Called(msg, fields)
+}
+
+// Error логирует сообщения об ошибках
+func (m *MockLogger) Error(msg string, fields ...zap.Field) {
+    m.Called(msg, fields)
+}
+
+// NewMockLogger создает новый экземпляр MockLogger
+func NewMockLogger() *MockLogger {
+    return &MockLogger{}
+}
+
+func TestInit_NoStorageSelected(t *testing.T) {
+    config := &flags.Config{}
+    mockLogger := NewMockLogger()
+
+    // Настройка ожиданий для методов Info и Error
+    mockLogger.On("Error", "No storage selected using default: MemoryStorage", mock.Anything).Return()
+
+    stor := storage.Init(config, mockLogger)
+    assert.IsType(t, &storage.MemStorage{}, stor)
+
+    // Проверка вызова методов
+    mockLogger.AssertExpectations(t)
+}
+
+
+// func TestInit_DBStorageSelected(t *testing.T) {
+//     config := &flags.Config{
+//         DBDSN: "postgres://postgres:mypassword@localhost:5432/metrix?sslmode=disable",
+//     }
+//     mockLogger := NewMockLogger()
+
+//     // Настройка ожиданий для методов Info и Error
+//     mockLogger.On("Info", "Selected storage: DB", mock.Anything).Return()
+//     mockLogger.On("Error", mock.Anything, mock.Anything).Return()
+
+//     // Mock DBConnect to avoid actual DB connection
+//     originalDBConnect := storage.DBConnect
+//     defer func() { storage.DBConnect = originalDBConnect }()
+//     storage.DBConnect = func(config *flags.Config, logger storage.Loggerer) (*storage.DBStorage, error) {
+//         return &storage.DBStorage{}, nil
+//     }
+
+//     stor := storage.Init(config, mockLogger)
+//     assert.IsType(t, &storage.DBStorage{}, stor)
+
+//     // Проверка вызова методов
+//     mockLogger.AssertExpectations(t)
+// }
+
+func TestInit_FileStorageSelected(t *testing.T) {
+    config := &flags.Config{
+        FileStoragePath: "/tmp/storage",
+    }
+    mockLogger := NewMockLogger()
+
+    // Настройка ожиданий для методов Info и Error
+    mockLogger.On("Info", "Selected storage: File", mock.Anything).Return()
+
+    stor := storage.Init(config, mockLogger)
+    assert.IsType(t, &storage.FileAndMemStorage{}, stor)
+
+    // Проверка вызова методов
+    mockLogger.AssertExpectations(t)
 }

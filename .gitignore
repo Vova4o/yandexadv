@@ -26,3 +26,9 @@ vendor/
 metricstest-darwin-arm64
 metricstest
 coverage.html
+serverlog.log
+agentlog.log
+metrics-db.json
+tempfile
+tempfile.json
+.tools/statictest
