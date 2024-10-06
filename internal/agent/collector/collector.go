@@ -54,7 +54,7 @@ func CollectMetrics(pollCount int64) []metrics.Metrics {
 }
 
 // CollectCPUAndMemlMetrics собирает дополнительные метрики и обновляет их в глобальной переменной
-func CollectCPUAndMemlMetrics(pollCount int64) []metrics.Metrics {
+func CollectCPUAndMemMetrics(pollCount int64) []metrics.Metrics {
 	// Собираем метрики памяти
 	v, _ := mem.VirtualMemory()
 
