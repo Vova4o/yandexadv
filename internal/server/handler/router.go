@@ -13,12 +13,12 @@ import (
 
 // Router структура для роутера
 type Router struct {
-	Middl   Middlewarer
-	mux     *gin.Engine
-	Service Servicer
-	server  *http.Server
-	stopCh  chan struct{}
-	mu      sync.Mutex
+	Middl   Middlewarer // middleware
+	mux     *gin.Engine // роутер
+	Service Servicer   // сервис
+	server  *http.Server // сервер
+	stopCh  chan struct{} // канал для остановки сервера
+	mu      sync.Mutex // мьютекс
 }
 
 // Middlewarer интерфейс для middleware

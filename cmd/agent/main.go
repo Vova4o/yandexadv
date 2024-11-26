@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync"
 	"time"
+	// _ "net/http/pprof"
 
 	"github.com/vova4o/yandexadv/internal/agent/collector"
 	"github.com/vova4o/yandexadv/internal/agent/flags"

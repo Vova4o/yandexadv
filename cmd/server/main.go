@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -44,6 +46,14 @@ func main() {
 		if err := router.StartServer(config.ServerAddress); err != nil {
 			logger.Error("Failed to start server: %v", zap.Error(err))
 			log.Fatalf("Failed to start server: %v", err)
+		}
+	}()
+
+	go func() {
+		logger.Info("Starting ppof server on :6060")
+		if err := http.ListenAndServe(":6060", nil); err != nil {
+			logger.Error("Failed to start pprof server: %v", zap.Error(err))
+			log.Fatalf("Failed to start pprof server: %v", err)
 		}
 	}()
 

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -35,6 +36,35 @@ func New(log *logger.Logger, key string) *Middleware {
 type GzipReader struct {
 	io.ReadCloser
 	reader *gzip.Reader
+}
+
+// GzipWriter - обертка для gzip.Writer
+type GzipWriter struct {
+	gin.ResponseWriter
+	writer *gzip.Writer
+}
+
+// Пул объектов для gzip.Reader и gzip.Writer
+var gzipReaderPool = sync.Pool{
+	New: func() interface{} {
+		return new(gzip.Reader)
+	},
+}
+
+var gzipWriterPool = sync.Pool{
+	New: func() interface{} {
+		return gzip.NewWriter(nil)
+	},
+}
+
+// Read - чтение данных из gzip.Reader
+func (g *GzipReader) Read(p []byte) (int, error) {
+	return g.reader.Read(p)
+}
+
+// Write - запись данных в gzip.Writer
+func (g *GzipWriter) Write(data []byte) (int, error) {
+	return g.writer.Write(data)
 }
 
 // CheckHash - проверка хэша
@@ -86,17 +116,14 @@ func calculateHash(data, key []byte) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// Read - чтение данных из gzip.Reader
-func (g *GzipReader) Read(p []byte) (int, error) {
-	return g.reader.Read(p)
-}
-
 // GunzipMiddleware - middleware для распаковки запросов
 func (m Middleware) GunzipMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if strings.Contains(c.GetHeader("Content-Encoding"), "gzip") {
-			gz, err := gzip.NewReader(c.Request.Body)
-			if err != nil {
+			gz := gzipReaderPool.Get().(*gzip.Reader)
+			defer gzipReaderPool.Put(gz)
+
+			if err := gz.Reset(c.Request.Body); err != nil {
 				c.AbortWithStatus(http.StatusBadRequest)
 				return
 			}
@@ -108,21 +135,14 @@ func (m Middleware) GunzipMiddleware() gin.HandlerFunc {
 	}
 }
 
-// GzipWriter - обертка для gzip.Writer
-type GzipWriter struct {
-	gin.ResponseWriter
-	writer *gzip.Writer
-}
-
-func (g *GzipWriter) Write(data []byte) (int, error) {
-	return g.writer.Write(data)
-}
-
 // GzipMiddleware - middleware для сжатия ответов
 func (m Middleware) GzipMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if strings.Contains(c.GetHeader("Accept-Encoding"), "gzip") {
-			gz := gzip.NewWriter(c.Writer)
+			gz := gzipWriterPool.Get().(*gzip.Writer)
+			defer gzipWriterPool.Put(gz)
+
+			gz.Reset(c.Writer)
 			defer gz.Close()
 
 			c.Writer = &GzipWriter{c.Writer, gz}
