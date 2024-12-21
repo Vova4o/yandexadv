@@ -13,12 +13,12 @@ import (
 
 // Router структура для роутера
 type Router struct {
-	Middl   Middlewarer
-	mux     *gin.Engine
-	Service Servicer
-	server  *http.Server
-	stopCh  chan struct{}
-	mu      sync.Mutex
+	Middl   Middlewarer // middleware
+	mux     *gin.Engine // роутер
+	Service Servicer   // сервис
+	server  *http.Server // сервер
+	stopCh  chan struct{} // канал для остановки сервера
+	mu      sync.Mutex // мьютекс
 }
 
 // Middlewarer интерфейс для middleware
@@ -26,6 +26,7 @@ type Middlewarer interface {
 	GinZap() gin.HandlerFunc
 	GunzipMiddleware() gin.HandlerFunc
 	GzipMiddleware() gin.HandlerFunc
+	CheckHash() gin.HandlerFunc
 }
 
 // Servicer интерфейс для сервиса
@@ -59,8 +60,14 @@ func (s *Router) RegisterRoutes() {
 	s.mux.Use(s.Middl.GunzipMiddleware())
 	s.mux.Use(s.Middl.GzipMiddleware())
 
+	updatesGroup := s.mux.Group("/updates")
+	updatesGroup.Use(s.Middl.CheckHash())
+	{
+		updatesGroup.POST("/", s.UpdateBatchMetricsHandler)
+	}
+
 	s.mux.POST("/update/:type/:name/:value", s.UpdateMetricHandler)
-	s.mux.POST("/updates/", s.UpdateBatchMetricsHandler)
+	// s.mux.POST("/updates/", s.UpdateBatchMetricsHandler)
 	s.mux.GET("/value/:type/:name", s.GetValueHandler)
 	s.mux.GET("/", s.StatisticPage)
 	s.mux.POST("/update/", s.UpdateMetricHandlerJSON)

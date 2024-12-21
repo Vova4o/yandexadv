@@ -15,6 +15,8 @@ type Config struct {
 	ReportInterval  time.Duration
 	PollInterval    time.Duration
 	AgenLogFileName string
+	SecretKey       string
+	RateLimit       int
 }
 
 // GetFlags устанавливает и получает флаги
@@ -23,7 +25,9 @@ func GetFlags() {
 	pflag.StringP("ServerAddress", "a", "localhost:8080", "HTTP server network address")
 	pflag.IntP("ReportInterval", "r", 10, "Interval between fetching reportable metrics in seconds")
 	pflag.IntP("PollInterval", "p", 2, "Interval between polling metrics in seconds")
-	pflag.StringP("AgentLogName", "l", "agentlog.log", "Agent log file name")
+	pflag.StringP("AgentLogName", "m", "agentlog.log", "Agent log file name")
+	pflag.StringP("Key", "k", "", "Key for the server")
+	pflag.IntP("RateLimit", "l", 0, "Rate limit for the server")
 
 	// Parse the command-line flags
 	pflag.Parse()
@@ -40,6 +44,8 @@ func GetFlags() {
 	bindFlagToViper("ReportInterval")
 	bindFlagToViper("PollInterval")
 	bindFlagToViper("AgentLogName")
+	bindFlagToViper("Key")
+	bindFlagToViper("RateLimit")
 
 	// Set the environment variable names
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
@@ -47,6 +53,8 @@ func GetFlags() {
 	bindEnvToViper("ReportInterval", "REPORT_INTERVAL")
 	bindEnvToViper("PollInterval", "POLL_INTERVAL")
 	bindEnvToViper("AgentLogName", "AGENT_LOG_NAME")
+	bindEnvToViper("Key", "KEY")
+	bindEnvToViper("RateLimit", "RATE_LIMIT")
 
 	// Read the environment variables
 	viper.AutomaticEnv()
@@ -72,7 +80,19 @@ func NewConfig() *Config {
 		ReportInterval:  GetReportInterval(),
 		PollInterval:    GetPollInterval(),
 		AgenLogFileName: GetAgentLogFileName(),
+		SecretKey:       GetKey(),
+		RateLimit:       GetRateLimit(),
 	}
+}
+
+// GetRateLimit возвращает ограничение скорости
+func GetRateLimit() int {
+	return viper.GetInt("RateLimit")
+}
+
+// GetKey возвращает ключ
+func GetKey() string {
+	return viper.GetString("Key")
 }
 
 // GetAgentLogFileName возвращает имя файла лога агента

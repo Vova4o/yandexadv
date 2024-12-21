@@ -17,7 +17,7 @@ import (
 // Service структура для бизнес-логики
 type Service struct {
 	Storage Storager
-	logger *logger.Logger
+	logger  *logger.Logger
 }
 
 // Storager интерфейс для хранилища
@@ -33,7 +33,7 @@ type Storager interface {
 func New(s Storager, logger *logger.Logger) *Service {
 	return &Service{
 		Storage: s,
-		logger: logger,
+		logger:  logger,
 	}
 }
 
@@ -43,19 +43,10 @@ func (s *Service) UpdateBatchMetricsServ(metrics []models.Metrics) error {
 		log.Printf("Empty metrics")
 		return models.NewHTTPError(http.StatusBadRequest, "Empty metrics")
 	}
-
-	// for _, metric := range metrics {
-	// 	if err := validateMetricJSON(&metric); err != nil {
-	// 		return err
-	// 	}
-	// }
+	// add this line just for github
+	s.logger.Info("Received POST JSON metrics for update", zap.Any("metrics", metrics))
 
 	for _, metric := range metrics {
-		s.logger.Info("Update metric", zap.String("metric", metric.ID))
-		if err := validateMetricJSON(&metric); err != nil {
-			s.logger.Error("Failed to validate metric", zap.Error(err))
-			return err
-		}
 		err := s.UpdateServJSON(&metric)
 		if err != nil {
 			log.Printf("failed to update metric: %v", err)
@@ -63,12 +54,6 @@ func (s *Service) UpdateBatchMetricsServ(metrics []models.Metrics) error {
 			return err
 		}
 	}
-
-	// err := s.Storage.UpdateBatch(metrics)
-	// if err != nil {
-	// 	log.Printf("failed to update metrics: %v", err)
-	// 	return err
-	// }
 
 	return nil
 }
@@ -330,3 +315,48 @@ func validateMetricJSON(metric *models.Metrics) error {
 
 	return nil
 }
+
+// // UpdateBatchMetricsServ обновление метрик в формате JSON by batch
+// func (s *Service) UpdateBatchMetricsServ(metrics []models.Metrics) error {
+//     if len(metrics) == 0 {
+//         log.Printf("Empty metrics")
+//         return models.NewHTTPError(http.StatusBadRequest, "Empty metrics")
+//     }
+
+//     // Создаем карту для хранения суммированных значений метрик
+//     metricsMap := make(map[string]models.Metrics)
+
+//     // Проверяем и суммируем метрики
+//     for _, metric := range metrics {
+//         if err := validateMetricJSON(&metric); err != nil {
+//             return err
+//         }
+
+//         if existingMetric, exists := metricsMap[metric.ID]; exists {
+//             if metric.MType == "counter" && existingMetric.MType == "counter" {
+//                 if existingMetric.Delta != nil && metric.Delta != nil {
+//                     *existingMetric.Delta += *metric.Delta
+//                 }
+//             } else {
+//                 metricsMap[metric.ID] = metric
+//             }
+//         } else {
+//             metricsMap[metric.ID] = metric
+//         }
+//     }
+
+//     // Преобразуем карту обратно в срез
+//     metricsToUpdate := make([]models.Metrics, 0, len(metricsMap))
+//     for _, metric := range metricsMap {
+//         metricsToUpdate = append(metricsToUpdate, metric)
+//     }
+
+//     // Обновляем метрики в хранилище
+//     err := s.Storage.UpdateBatch(metricsToUpdate)
+//     if err != nil {
+//         log.Printf("failed to update metrics: %v", err)
+//         return err
+//     }
+
+//     return nil
+// }
