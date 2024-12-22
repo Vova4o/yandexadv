@@ -93,7 +93,7 @@ func (d *DBStorage) UpdateBatch(metrics []models.Metrics) error {
 	defer tx.Rollback(context.Background())
 
 	for _, metric := range metrics {
-		_, err := tx.Exec(context.Background(),
+		_, err = tx.Exec(context.Background(),
 			`INSERT INTO metrics (name, type, value, delta, timestamp)
             VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (name) DO UPDATE
