@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync"
 	"time"
+	// _ "net/http/pprof"
 
 	"github.com/vova4o/yandexadv/internal/agent/collector"
 	"github.com/vova4o/yandexadv/internal/agent/flags"
@@ -43,27 +44,27 @@ func main() {
 	if config.RateLimit == 0 {
 		// Старый способ отправки метрик
 		go func() {
-			for {
-				select {
-				case <-tickerPoll.C:
-					pollCount++
-					metricsMutex.Lock()
-					runtimeMetrics := collector.CollectMetrics(pollCount)
-					additionalMetrics := collector.CollectCPUAndMemlMetrics(pollCount)
-					metricsMutex.Unlock()
+			for range tickerPoll.C {
+				pollCount++
+				metricsMutex.Lock()
+				runtimeMetrics := collector.CollectMetrics(pollCount)
+				additionalMetrics := collector.CollectCPUAndMemMetrics(pollCount)
+				metricsMutex.Unlock()
 
-					allMetrics := append(runtimeMetrics, additionalMetrics...)
-					sender.SendMetricsBatch(config, allMetrics)
+				allMetrics := append(runtimeMetrics, additionalMetrics...)
+				sender.SendMetricsBatch(config, allMetrics)
+			}
+		}()
 
-				case <-tickerReport.C:
-					metricsMutex.Lock()
-					runtimeMetrics := collector.CollectMetrics(pollCount)
-					additionalMetrics := collector.CollectCPUAndMemlMetrics(pollCount)
-					metricsMutex.Unlock()
+		go func() {
+			for range tickerReport.C {
+				metricsMutex.Lock()
+				runtimeMetrics := collector.CollectMetrics(pollCount)
+				additionalMetrics := collector.CollectCPUAndMemMetrics(pollCount)
+				metricsMutex.Unlock()
 
-					allMetrics := append(runtimeMetrics, additionalMetrics...)
-					sender.SendMetricsBatch(config, allMetrics)
-				}
+				allMetrics := append(runtimeMetrics, additionalMetrics...)
+				sender.SendMetricsBatch(config, allMetrics)
 			}
 		}()
 
@@ -81,50 +82,41 @@ func main() {
 
 		// Горутина для сбора runtime метрик
 		go func() {
-			for {
-				select {
-				case <-tickerPoll.C:
-					pollCount++
-					metricsMutex.Lock()
-					runtimeMetrics := collector.CollectMetrics(pollCount)
-					metricsMutex.Unlock()
+			for range tickerPoll.C {
+				pollCount++
+				metricsMutex.Lock()
+				runtimeMetrics := collector.CollectMetrics(pollCount)
+				metricsMutex.Unlock()
 
-					metricsChan <- AllMetrics{RuntimeMetrics: runtimeMetrics}
-				}
+				metricsChan <- AllMetrics{RuntimeMetrics: runtimeMetrics}
 			}
 		}()
 
 		// Горутина для сбора дополнительных метрик
 		go func() {
-			for {
-				select {
-				case <-tickerPoll.C:
-					metricsMutex.Lock()
-					additionalMetrics := collector.CollectCPUAndMemlMetrics(pollCount)
-					metricsMutex.Unlock()
+			for range tickerPoll.C {
+				metricsMutex.Lock()
+				additionalMetrics := collector.CollectCPUAndMemMetrics(pollCount)
+				metricsMutex.Unlock()
 
-					metricsChan <- AllMetrics{AdditionalMetrics: additionalMetrics}
-				}
+				metricsChan <- AllMetrics{AdditionalMetrics: additionalMetrics}
 			}
 		}()
 
 		// Горутина для отправки метрик на сервер
 		go func() {
-			for {
-				select {
-				case <-tickerReport.C:
-					metricsMutex.Lock()
-					var combinedMetrics AllMetrics
-					for i := 0; i < config.RateLimit; i++ {
-						metrics := <-metricsChan
-						combinedMetrics.RuntimeMetrics = append(combinedMetrics.RuntimeMetrics, metrics.RuntimeMetrics...)
-						combinedMetrics.AdditionalMetrics = append(combinedMetrics.AdditionalMetrics, metrics.AdditionalMetrics...)
-					}
-					metricsMutex.Unlock()
-
-					allMetrics := append(combinedMetrics.RuntimeMetrics, combinedMetrics.AdditionalMetrics...)
-					sender.SendMetricsBatch(config, allMetrics)
+			for range tickerReport.C {
+				metricsMutex.Lock()
+				var combinedMetrics AllMetrics
+				for i := 0; i < config.RateLimit; i++ {
+					metrics := <-metricsChan
+					combinedMetrics.RuntimeMetrics = append(combinedMetrics.RuntimeMetrics, metrics.RuntimeMetrics...)
+					combinedMetrics.AdditionalMetrics = append(combinedMetrics.AdditionalMetrics, metrics.AdditionalMetrics...)
 				}
+				metricsMutex.Unlock()
+
+				allMetrics := append(combinedMetrics.RuntimeMetrics, combinedMetrics.AdditionalMetrics...)
+				sender.SendMetricsBatch(config, allMetrics)
 			}
 		}()
 
