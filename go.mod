@@ -1,6 +1,8 @@
 module github.com/vova4o/yandexadv
 
-go 1.22
+go 1.22.1
+
+toolchain go1.22.4
 
 require (
 	github.com/gin-gonic/gin v1.10.0
@@ -11,6 +13,8 @@ require (
 	github.com/spf13/viper v1.19.0
 	github.com/stretchr/testify v1.9.0
 	go.uber.org/zap v1.27.0
+	golang.org/x/tools v0.24.0
+	honnef.co/go/tools v0.5.1
 )
 
 require (
@@ -63,7 +67,10 @@ require (
 	golang.org/x/arch v0.9.0 // indirect
 	golang.org/x/crypto v0.26.0 // indirect
 	golang.org/x/exp v0.0.0-20240823005443-9b4947da3948 // indirect
+	golang.org/x/exp/typeparams v0.0.0-20231108232855-2478ac86f678 // indirect
+	golang.org/x/mod v0.20.0 // indirect
 	golang.org/x/net v0.28.0 // indirect
+	golang.org/x/sync v0.8.0 // indirect
 	golang.org/x/sys v0.24.0 // indirect
 	golang.org/x/text v0.17.0 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect

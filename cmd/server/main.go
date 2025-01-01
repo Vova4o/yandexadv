@@ -19,6 +19,12 @@ import (
 	"go.uber.org/zap"
 )
 
+var (
+	buildVersion = "N/A"
+	buildDate    = "N/A"
+	buildCommit  = "N/A"
+)
+
 func main() {
 	config := flags.NewConfig()
 
@@ -26,6 +32,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create logger: %v", err)
 	}
+
+	logger.Info("Build information",
+		zap.String("version", buildVersion),
+		zap.String("date", buildDate),
+		zap.String("commit", buildCommit),
+	)
 
 	middle := middleware.New(logger, config.SecretKey)
 
