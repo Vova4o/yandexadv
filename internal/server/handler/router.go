@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"os"
 	"sync"
 
 	"github.com/gin-gonic/gin"
@@ -13,12 +14,13 @@ import (
 
 // Router структура для роутера
 type Router struct {
-	Middl   Middlewarer // middleware
-	mux     *gin.Engine // роутер
-	Service Servicer   // сервис
-	server  *http.Server // сервер
-	stopCh  chan struct{} // канал для остановки сервера
-	mu      sync.Mutex // мьютекс
+	Middl      Middlewarer   // middleware
+	mux        *gin.Engine   // роутер
+	Service    Servicer      // сервис
+	server     *http.Server  // сервер
+	stopCh     chan struct{} // канал для остановки сервера
+	mu         sync.Mutex    // мьютекс
+	cryptoPath string        // путь к сертификату
 }
 
 // Middlewarer интерфейс для middleware
@@ -41,21 +43,21 @@ type Servicer interface {
 }
 
 // New создание нового роутера
-func New(s Servicer, middleware Middlewarer) *Router {
+func New(s Servicer, middleware Middlewarer, path string) *Router {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
 
 	return &Router{
-		Middl:   middleware,
-		mux:     router,
-		Service: s,
-		stopCh:  make(chan struct{}),
+		Middl:      middleware,
+		mux:        router,
+		Service:    s,
+		stopCh:     make(chan struct{}),
+		cryptoPath: path,
 	}
 }
 
 // RegisterRoutes регистрация маршрутов
 func (s *Router) RegisterRoutes() {
-
 	s.mux.Use(s.Middl.GinZap())
 	s.mux.Use(s.Middl.GunzipMiddleware())
 	s.mux.Use(s.Middl.GzipMiddleware())
@@ -75,6 +77,28 @@ func (s *Router) RegisterRoutes() {
 	s.mux.GET("/ping", s.PingHandler)
 }
 
+func (s *Router) getFilesFromPath() (string, string, error) {
+	files, err := os.ReadDir(s.cryptoPath)
+	if err != nil {
+		return "", "", err
+	}
+
+	var cert, key string
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+		if file.Name() == "server.pem" {
+			cert = s.cryptoPath + "/server.pem"
+		}
+		if file.Name() == "server.key" {
+			key = s.cryptoPath + "/server.key"
+		}
+	}
+
+	return cert, key, nil
+}
+
 // StartServer запуск сервера
 func (s *Router) StartServer(addr string) error {
 	// Создание http.Server с использованием Gin
@@ -83,10 +107,24 @@ func (s *Router) StartServer(addr string) error {
 		Handler: s.mux,
 	}
 
-	if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		// Логирование ошибки, если сервер не смог запуститься
-		log.Println("failed to start server", err)
-		panic(err)
+	if s.cryptoPath != "" {
+		// Загрузка сертификата
+		cert, key, err := s.getFilesFromPath()
+		if err != nil {
+			log.Println("failed to load cert", err)
+		}
+
+		if err := s.server.ListenAndServeTLS(cert, key); err != nil && err != http.ErrServerClosed {
+			// Логирование ошибки, если сервер не смог запуститься
+			log.Println("failed to start server", err)
+			panic(err)
+		}
+	} else {
+		if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			// Логирование ошибки, если сервер не смог запуститься
+			log.Println("failed to start server", err)
+			panic(err)
+		}
 	}
 
 	<-s.stopCh

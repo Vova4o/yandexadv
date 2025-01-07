@@ -17,6 +17,7 @@ type Config struct {
 	AgenLogFileName string
 	SecretKey       string
 	RateLimit       int
+	CryptoPath      string
 }
 
 // GetFlags устанавливает и получает флаги
@@ -28,6 +29,7 @@ func GetFlags() {
 	pflag.StringP("AgentLogName", "m", "agentlog.log", "Agent log file name")
 	pflag.StringP("Key", "k", "", "Key for the server")
 	pflag.IntP("RateLimit", "l", 0, "Rate limit for the server")
+	pflag.String("crypto-key", "", "Crypto key file path")
 
 	// Parse the command-line flags
 	pflag.Parse()
@@ -46,6 +48,7 @@ func GetFlags() {
 	bindFlagToViper("AgentLogName")
 	bindFlagToViper("Key")
 	bindFlagToViper("RateLimit")
+	bindFlagToViper("crypto-key")
 
 	// Set the environment variable names
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
@@ -55,6 +58,7 @@ func GetFlags() {
 	bindEnvToViper("AgentLogName", "AGENT_LOG_NAME")
 	bindEnvToViper("Key", "KEY")
 	bindEnvToViper("RateLimit", "RATE_LIMIT")
+	bindEnvToViper("crypto-key", "CRYPTO_KEY")
 
 	// Read the environment variables
 	viper.AutomaticEnv()
@@ -82,6 +86,7 @@ func NewConfig() *Config {
 		AgenLogFileName: GetAgentLogFileName(),
 		SecretKey:       GetKey(),
 		RateLimit:       GetRateLimit(),
+		CryptoPath:      CryptoPath(),
 	}
 }
 
@@ -113,4 +118,9 @@ func GetReportInterval() time.Duration {
 // GetPollInterval возвращает интервал получения метрик
 func GetPollInterval() time.Duration {
 	return time.Duration(viper.GetInt("PollInterval")) * time.Second
+}
+
+// CryptoPath возвращает путь к файлу с ключом
+func CryptoPath() string {
+	return viper.GetString("crypto-key")
 }
