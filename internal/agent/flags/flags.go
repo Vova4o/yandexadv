@@ -30,6 +30,7 @@ func GetFlags() {
 	pflag.StringP("Key", "k", "", "Key for the server")
 	pflag.IntP("RateLimit", "l", 0, "Rate limit for the server")
 	pflag.String("crypto-key", "", "Crypto key file path")
+	pflag.StringP("config", "c", "", "Path to the configuration file")
 
 	// Parse the command-line flags
 	pflag.Parse()
@@ -49,6 +50,7 @@ func GetFlags() {
 	bindFlagToViper("Key")
 	bindFlagToViper("RateLimit")
 	bindFlagToViper("crypto-key")
+	bindFlagToViper("config")
 
 	// Set the environment variable names
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
@@ -59,6 +61,17 @@ func GetFlags() {
 	bindEnvToViper("Key", "KEY")
 	bindEnvToViper("RateLimit", "RATE_LIMIT")
 	bindEnvToViper("crypto-key", "CRYPTO_KEY")
+	bindEnvToViper("config", "CONFIG")
+
+	configFile := viper.GetString("config")
+	if configFile != "" {
+		log.Println("Loading config file:", configFile)
+		viper.SetConfigFile(configFile)
+		viper.SetConfigType("json")
+		if err := viper.ReadInConfig(); err != nil {
+			log.Println(err)
+		}
+	}
 
 	// Read the environment variables
 	viper.AutomaticEnv()

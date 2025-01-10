@@ -32,6 +32,7 @@ func GetFlags() {
 	bindEnvToViper("ServerLoggerFile", "SERVER_LOGGER_FILE")
 	bindEnvToViper("Key", "KEY")
 	bindEnvToViper("CryptoKey", "CRYPTO_KEY")
+	bindEnvToViper("config", "CONFIG")
 
 	// Read the environment variables
 	viper.AutomaticEnv()
@@ -45,6 +46,7 @@ func GetFlags() {
 	pflag.StringP("ServerLoggerFile", "l", "serverlog.log", "Full filename where server logs are saved")
 	pflag.StringP("Key", "k", "", "Key for the server")
 	pflag.String("CryptoKey", "", "Path to TLS certificate directory")
+	pflag.StringP("config", "c", "", "Path to the configuration file")
 
 	// Parse the command-line flags
 	pflag.Parse()
@@ -65,6 +67,20 @@ func GetFlags() {
 	bindFlagToViper("ServerLoggerFile")
 	bindFlagToViper("Key")
 	bindFlagToViper("CryptoKey")
+	bindFlagToViper("config")
+
+	// Read configuration from JSON file if specified
+	configFile := viper.GetString("config")
+	if configFile != "" {
+		log.Println("Reading configuration from file:", configFile)
+		viper.SetConfigFile(configFile)
+		viper.SetConfigType("json")
+		if err := viper.ReadInConfig(); err != nil {
+			log.Fatalf("Error reading config file: %v", err)
+		}
+	}
+
+	log.Println("Configuration loaded successfully")
 }
 
 func bindFlagToViper(flagName string) {
