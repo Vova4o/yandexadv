@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -16,8 +17,34 @@ import (
 	"github.com/vova4o/yandexadv/internal/agent/metrics"
 )
 
-const maxRetries = 3
-const retryDelay = 1 * time.Second
+const (
+	maxRetries = 3
+	retryDelay = 1 * time.Second
+)
+
+// createTLSConfig creates TLS configuration with the provided certificate
+func createTLSConfig(certPath string) (*tls.Config, error) {
+	return &tls.Config{
+		InsecureSkipVerify: true, // For development only
+		MinVersion: tls.VersionTLS12,
+		CipherSuites: []uint16{
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+		},
+	}, nil
+}
+
+// getProtocol returns http or https based on crypto path
+func getProtocol(cryptoPath string) string {
+	if cryptoPath != "" {
+		return "https"
+	}
+	return "http"
+}
 
 // CompressData сжимает данные с использованием gzip
 func CompressData(data []byte) ([]byte, error) {
@@ -35,12 +62,22 @@ func CompressData(data []byte) ([]byte, error) {
 }
 
 // ServerSupportsGzip проверяет, поддерживает ли сервер gzip-сжатие
-func ServerSupportsGzip(address string) bool {
+func ServerSupportsGzip(cfg *flags.Config) bool {
 	client := resty.New()
+	protocol := getProtocol(cfg.CryptoPath)
+
+	if cfg.CryptoPath != "" {
+		tlsConfig, err := createTLSConfig(cfg.CryptoPath)
+		if err != nil {
+			log.Printf("Failed to create TLS config: %v", err)
+			return false
+		}
+		client.SetTLSClientConfig(tlsConfig)
+	}
+
 	resp, err := client.R().
 		SetHeader("Accept-Encoding", "gzip").
-		Get(fmt.Sprintf("http://%s", address))
-
+		Get(fmt.Sprintf("%s://%s", protocol, cfg.ServerAddress))
 	if err != nil {
 		log.Printf("Failed to check gzip support: %v\n", err)
 		return false
@@ -58,13 +95,22 @@ func calculateHash(data, key []byte) string {
 
 // SendMetricsBatch отправляет метрики на сервер пакетом
 func SendMetricsBatch(cfg *flags.Config, metricsData []metrics.Metrics) {
-	address := cfg.ServerAddress
-	key := cfg.SecretKey
-
 	client := resty.New()
-	useGzip := ServerSupportsGzip(address)
+	protocol := getProtocol(cfg.CryptoPath)
 
-	url := fmt.Sprintf("http://%s/updates", address)
+	// Configure TLS if crypto path is provided
+	if cfg.CryptoPath != "" {
+		tlsConfig, err := createTLSConfig(cfg.CryptoPath)
+		if err != nil {
+			log.Printf("Failed to create TLS config: %v", err)
+			return
+		}
+		client.SetTLSClientConfig(tlsConfig)
+	}
+
+	url := fmt.Sprintf("%s://%s/updates", protocol, cfg.ServerAddress)
+	log.Printf("Sending metrics to %s\n", url)	
+	useGzip := ServerSupportsGzip(cfg)
 
 	// Сериализация метрик в JSON
 	jsonData, err := json.Marshal(metricsData)
@@ -74,12 +120,13 @@ func SendMetricsBatch(cfg *flags.Config, metricsData []metrics.Metrics) {
 	}
 
 	var hash string
-	if key != "" {
-		hash = calculateHash(jsonData, []byte(key))
+	if cfg.SecretKey != "" {
+		hash = calculateHash(jsonData, []byte(cfg.SecretKey))
 	}
 
-	request := client.R().SetHeader("Content-Type", "application/json")
-	request.SetHeader("HashSHA256", hash)
+	request := client.R().
+		SetHeader("Content-Type", "application/json").
+		SetHeader("HashSHA256", hash)
 
 	if useGzip {
 		request.SetHeader("Content-Encoding", "gzip")
@@ -99,16 +146,27 @@ func SendMetricsBatch(cfg *flags.Config, metricsData []metrics.Metrics) {
 }
 
 // SendMetrics отправляет метрики на сервер
-func SendMetrics(address string, metricsData []metrics.Metrics) {
+func SendMetrics(cfg *flags.Config, metricsData []metrics.Metrics) {
 	client := resty.New()
-	useGzip := ServerSupportsGzip(address)
+	protocol := getProtocol(cfg.CryptoPath)
+
+	if cfg.CryptoPath != "" {
+		tlsConfig, err := createTLSConfig(cfg.CryptoPath)
+		if err != nil {
+			log.Printf("Failed to create TLS config: %v", err)
+			return
+		}
+		client.SetTLSClientConfig(tlsConfig)
+	}
+
+	useGzip := ServerSupportsGzip(cfg)
 
 	for _, metric := range metricsData {
 		var url string
 		if metric.Value == nil {
-			url = fmt.Sprintf("http://%s/update/%s/%s/%v", address, metric.MType, metric.ID, *metric.Delta)
+			url = fmt.Sprintf("%s://%s/update/%s/%s/%v", protocol, cfg.ServerAddress, metric.MType, metric.ID, *metric.Delta)
 		} else {
-			url = fmt.Sprintf("http://%s/update/%s/%s/%v", address, metric.MType, metric.ID, *metric.Value)
+			url = fmt.Sprintf("%s://%s/update/%s/%s/%v", protocol, cfg.ServerAddress, metric.MType, metric.ID, *metric.Value)
 		}
 
 		request := client.R().SetHeader("Content-Type", "text/plain")
@@ -132,12 +190,23 @@ func SendMetrics(address string, metricsData []metrics.Metrics) {
 }
 
 // SendMetricsJSON отправляет метрики на сервер в формате JSON
-func SendMetricsJSON(address string, metricsData []metrics.Metrics) {
+func SendMetricsJSON(cfg *flags.Config, metricsData []metrics.Metrics) {
 	client := resty.New()
-	useGzip := ServerSupportsGzip(address)
+	protocol := getProtocol(cfg.CryptoPath)
+
+	if cfg.CryptoPath != "" {
+		tlsConfig, err := createTLSConfig(cfg.CryptoPath)
+		if err != nil {
+			log.Printf("Failed to create TLS config: %v", err)
+			return
+		}
+		client.SetTLSClientConfig(tlsConfig)
+	}
+
+	useGzip := ServerSupportsGzip(cfg)
 
 	for _, metric := range metricsData {
-		url := fmt.Sprintf("http://%s/update/", address)
+		url := fmt.Sprintf("%s://%s/update/", protocol, cfg.ServerAddress)
 
 		// Сериализация метрики в JSON
 		jsonData, err := json.Marshal(metric)
@@ -177,6 +246,7 @@ func sendWithRetry(request *resty.Request, url string) error {
 			return nil
 		} else {
 			log.Printf("Failed to send request: status code %d\n", resp.StatusCode())
+			log.Printf("Response body: %s\n", resp.String())
 		}
 
 		time.Sleep(delay)

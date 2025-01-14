@@ -17,12 +17,13 @@ type Config struct {
 	ServerLogFile   string
 	DBDSN           string
 	SecretKey       string
+	CryptoPath      string
 }
 
 // GetFlags устанавливает и получает флаги
 func GetFlags() {
 	// Set the environment variable names
-	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
 	bindEnvToViper("DatabaseDSN", "DATABASE_DSN")
 	bindEnvToViper("ServerAddress", "ADDRESS")
 	bindEnvToViper("StoreInterval", "STORE_INTERVAL")
@@ -30,23 +31,22 @@ func GetFlags() {
 	bindEnvToViper("Restore", "RESTORE")
 	bindEnvToViper("ServerLoggerFile", "SERVER_LOGGER_FILE")
 	bindEnvToViper("Key", "KEY")
+	bindEnvToViper("CryptoKey", "CRYPTO_KEY")
+	bindEnvToViper("config", "CONFIG")
 
 	// Read the environment variables
 	viper.AutomaticEnv()
 
-	// postgres://postgres:mypassword@localhost:5432/metrix?sslmode=disable
-	// metrics-db.json
-
 	// Define the flags and bind them to viper
 	pflag.StringP("DatabaseDSN", "d", "", "Database DSN")
-	pflag.StringP("ServerAddress", "a", "localhost:8080", "HTTP server network address")
+	pflag.StringP("ServerAddress", "a", "localhost:9090", "HTTP server network address")
 	pflag.IntP("StoreInterval", "i", 300, "Interval in seconds to store the current server readings to disk")
 	pflag.StringP("FileStoragePath", "f", "", "Full filename where current values are saved")
 	pflag.BoolP("Restore", "r", true, "Whether to load previously saved values from the specified file at server startup")
 	pflag.StringP("ServerLoggerFile", "l", "serverlog.log", "Full filename where server logs are saved")
 	pflag.StringP("Key", "k", "", "Key for the server")
-
-	//d=postgres://postgres:mypassword@localhost:5432/metrix?sslmode=disable
+	pflag.String("CryptoKey", "", "Path to TLS certificate directory")
+	pflag.StringP("config", "c", "", "Path to the configuration file")
 
 	// Parse the command-line flags
 	pflag.Parse()
@@ -66,6 +66,21 @@ func GetFlags() {
 	bindFlagToViper("Restore")
 	bindFlagToViper("ServerLoggerFile")
 	bindFlagToViper("Key")
+	bindFlagToViper("CryptoKey")
+	bindFlagToViper("config")
+
+	// Read configuration from JSON file if specified
+	configFile := viper.GetString("config")
+	if configFile != "" {
+		log.Println("Reading configuration from file:", configFile)
+		viper.SetConfigFile(configFile)
+		viper.SetConfigType("json")
+		if err := viper.ReadInConfig(); err != nil {
+			log.Fatalf("Error reading config file: %v", err)
+		}
+	}
+
+	log.Println("Configuration loaded successfully")
 }
 
 func bindFlagToViper(flagName string) {
@@ -98,6 +113,7 @@ func NewConfig() *Config {
 		ServerLogFile:   ServerLogFile(),
 		DBDSN:           DBDSN(),
 		SecretKey:       Key(),
+		CryptoPath:      CryptoPath(),
 	}
 }
 
@@ -124,6 +140,11 @@ func Address() string {
 // Interval возвращает интервал сохранения текущих значений сервера на диск
 func Interval() int {
 	return viper.GetInt("StoreInterval")
+}
+
+// CryptoPath возвращает путь к файлу с ключом
+func CryptoPath() string {
+	return viper.GetString("CryptoKey")
 }
 
 // FileStoragePath возвращает путь к файлу хранения

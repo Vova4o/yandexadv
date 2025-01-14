@@ -34,6 +34,7 @@ func (s *Router) UpdateBatchMetricsHandler(c *gin.Context) {
 
 // PingHandler обработчик для проверки подключения к базе данных
 func (s *Router) PingHandler(c *gin.Context) {
+	log.Printf("Ping handler called with headers: %+v", c.Request.Header)
 	err := s.Service.PingDB()
 	if err != nil {
 		log.Printf("Failed to ping database: %v", err)
@@ -41,6 +42,7 @@ func (s *Router) PingHandler(c *gin.Context) {
 		return
 	}
 
+	log.Printf("Ping successful, sending pong response")
 	c.String(http.StatusOK, "pong")
 }
 
@@ -97,7 +99,6 @@ func (s *Router) UpdateMetricHandlerJSON(c *gin.Context) {
 	// }
 
 	err := s.Service.UpdateServJSON(&metric)
-
 	if err != nil {
 		if httpErr, ok := err.(*models.HTTPError); ok {
 			// log.Printf("Error: %v", httpErr.Message)
@@ -128,14 +129,18 @@ func (s *Router) UpdateMetricHandlerJSON(c *gin.Context) {
 
 // StatisticPage обработчик для страницы статистики
 func (s *Router) StatisticPage(c *gin.Context) {
+	log.Printf("StatisticPage handler called")
 	tmpl, metrics, err := s.Service.MetrixStatistic()
 	if err != nil {
+		log.Printf("Error getting metrics: %v", err)
 		c.String(http.StatusInternalServerError, "internal server error")
 		return
 	}
 
+	log.Printf("Got metrics: %+v", metrics)
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, metrics); err != nil {
+		log.Printf("Error executing template: %v", err)
 		c.String(http.StatusInternalServerError, "internal server error")
 		return
 	}

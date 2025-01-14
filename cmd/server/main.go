@@ -45,7 +45,7 @@ func main() {
 
 	service := service.New(stor, logger)
 
-	router := handler.New(service, middle)
+	router := handler.New(service, middle, config.CryptoPath)
 	router.RegisterRoutes()
 
 	// Создание канала для получения сигналов завершения работы
@@ -54,9 +54,8 @@ func main() {
 
 	// Запуск сервера в отдельной горутине
 	go func() {
-		logger.Info("Starting server on " + config.ServerAddress)
 		if err := router.StartServer(config.ServerAddress); err != nil {
-			logger.Error("Failed to start server: %v", zap.Error(err))
+			logger.Error("Failed to start server", zap.Error(err))
 			log.Fatalf("Failed to start server: %v", err)
 		}
 	}()
@@ -64,7 +63,7 @@ func main() {
 	go func() {
 		logger.Info("Starting ppof server on :6060")
 		if err := http.ListenAndServe(":6060", nil); err != nil {
-			logger.Error("Failed to start pprof server: %v", zap.Error(err))
+			logger.Error("Failed to start pprof server", zap.Error(err))
 			log.Fatalf("Failed to start pprof server: %v", err)
 		}
 	}()
@@ -77,7 +76,7 @@ func main() {
 	defer cancel()
 
 	if err := stor.Stop(); err != nil {
-		logger.Error("Failed to stop storage: %v", zap.Error(err))
+		logger.Error("Failed to stop storage", zap.Error(err))
 	}
 
 	// Логирование завершения работы сервера
@@ -85,7 +84,7 @@ func main() {
 
 	// Завершение работы сервера
 	if err := router.StopServer(ctx); err != nil {
-		logger.Error("Server forced to shutdown: %v", zap.Error(err))
+		logger.Error("Server forced to shutdown", zap.Error(err))
 		log.Fatalf("Server forced to shutdown: %v", err)
 	}
 
